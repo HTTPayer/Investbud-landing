@@ -43,9 +43,16 @@ npm run build
 npm start
 ```
 
+## Documentation
+
+For detailed setup and technical documentation, see the `docs/` folder:
+- [Setup Guide](docs/SETUP.md) - Complete setup instructions
+- [Payment Flow](docs/PAYMENT_FLOW.md) - x402 payment system documentation
+- [Backend Format](docs/BACKEND_FORMAT.md) - API response format specifications
+
 ## Backend Integration
 
-The chat expects a `/chat` endpoint. See components for full API details.
+The chat expects `/chat` and `/advise` endpoints. See documentation for full API details.
 
 ## License
 

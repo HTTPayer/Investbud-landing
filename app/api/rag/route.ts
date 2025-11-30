@@ -9,12 +9,6 @@ export async function POST(request: NextRequest) {
   try {
     const { userMessage, backendResponse, userContext } = await request.json();
     
-    console.log('[RAG API] Processing request:', {
-      userMessageLength: userMessage?.length,
-      backendResponseLength: backendResponse?.length,
-      userContextLength: userContext?.length,
-    });
-    
     // Parse userContext to check if this is an advise response
     let contextObj;
     try {
@@ -24,13 +18,8 @@ export async function POST(request: NextRequest) {
     }
 
     const isAdviseResponse = contextObj.isAdviseResponse || false;
-    
-    console.log('[RAG API] Is advise response:', isAdviseResponse);
-    
     const hasWalletContext = contextObj.hasWalletContext || false;
     const previousWalletAddress = contextObj.previousWalletAddress;
-    
-    console.log('[RAG API] Has wallet context:', hasWalletContext, 'Previous wallet:', previousWalletAddress);
 
     const systemPrompt = `You are Investbud AI, a financial information assistant specializing in crypto and macro markets analysis.
 
@@ -149,11 +138,6 @@ Format example:
     });
 
     const enhancedResponse = completion.choices[0]?.message?.content || backendResponse;
-    
-    console.log('[RAG API] Response generated:', {
-      responseLength: enhancedResponse?.length,
-      isAdviseResponse,
-    });
 
     return NextResponse.json({ 
       success: true, 
@@ -161,15 +145,6 @@ Format example:
     });
 
   } catch (error) {
-    console.error('=== RAG API ERROR ===');
-    console.error('Error Type:', error?.constructor?.name);
-    console.error('Error Message:', error instanceof Error ? error.message : error);
-    console.error('Full Error:', JSON.stringify(error, null, 2));
-    if (error instanceof Error && error.stack) {
-      console.error('Stack Trace:', error.stack);
-    }
-    console.error('=====================');
-    
     return NextResponse.json(
       { 
         success: false, 

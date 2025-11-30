@@ -7,12 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    console.log('[Advise API] Request received:', {
-      wallet_address: body.wallet_address,
-      network: body.network,
-      chain_id: body.chain_id,
-    });
-    
     // Get X-PAYMENT header if present
     const paymentHeader = request.headers.get('x-payment');
     
@@ -25,8 +19,6 @@ export async function POST(request: NextRequest) {
       headers['X-PAYMENT'] = paymentHeader;
     }
 
-    console.log('[Advise API] Calling backend:', `${BACKEND_URL}/advise`);
-
     const response = await fetch(`${BACKEND_URL}/advise`, {
       method: 'POST',
       headers,
@@ -34,11 +26,6 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
-    
-    console.log('[Advise API] Backend response:', {
-      status: response.status,
-      hasData: !!data,
-    });
 
     // Forward the response with the same status code
     return NextResponse.json(data, { 
@@ -50,7 +37,6 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('[Advise API] Error:', error);
     return NextResponse.json(
       { error: 'Failed to connect to backend', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -23,31 +23,31 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+    <section id="how-it-works" className="py-12 sm:py-20 md:py-24 bg-white">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6">
+        <div className="text-center mb-8 sm:mb-16">
+          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-2 sm:mb-4 px-2">
             How It Works
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-sm sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto px-3">
             Three steps to better crypto investment decisions
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-12">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-10 md:gap-12">
           {steps.map((step, index) => (
             <div key={index} className="relative">
               {index < steps.length - 1 && (
                 <div className="hidden md:block absolute top-12 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-blue-300 to-transparent"></div>
               )}
               <div className="relative">
-                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <step.icon className="w-12 h-12 text-white" />
+                <div className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-3 sm:mb-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <step.icon className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-4 text-center px-1">
                   {step.title}
                 </h3>
-                <p className="text-gray-600 text-center leading-relaxed">
+                <p className="text-xs sm:text-base text-gray-600 text-center leading-relaxed px-1">
                   {step.description}
                 </p>
               </div>

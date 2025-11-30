@@ -8,6 +8,19 @@ import { useMetaMask } from '../hooks/useMetaMask';
 import { sendMessageWithX402, requestWalletAdviseWithX402, sendWalletChatWithX402 } from '../lib/x402';
 import WalletModal from './WalletModal';
 
+// Función para generar UUID compatible con todos los navegadores
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback para navegadores que no soportan crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 export default function InvestbudChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -21,11 +34,11 @@ export default function InvestbudChat() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('investbud_session_id');
       if (saved) return saved;
-      const newId = crypto.randomUUID();
+      const newId = generateUUID();
       localStorage.setItem('investbud_session_id', newId);
       return newId;
     }
-    return crypto.randomUUID();
+    return generateUUID();
   });
   
   const [regimeSignal, setRegimeSignal] = useState<RegimeSignal>();
@@ -93,7 +106,7 @@ export default function InvestbudChat() {
     }
 
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
@@ -120,17 +133,6 @@ export default function InvestbudChat() {
         ? (extractedWallet || address) 
         : analyzedWalletAddress;
 
-      console.log('[InvestbudChat] Request routing:', {
-        isWalletRequest,
-        extractedWallet,
-        analyzedWalletAddress,
-        targetWalletAddress,
-        isNewWalletRequest,
-        shouldUseAdvice,
-        shouldUseChat,
-        hasAdvicePaymentToday: hasAdvicePaymentToday(),
-      });
-
       let data;
 
       if (shouldUseAdvice) {
@@ -141,8 +143,6 @@ export default function InvestbudChat() {
         if (!walletAddrForAdvise) {
           throw new Error('No wallet address available for wallet analysis');
         }
-        
-        console.log('[InvestbudChat] Calling advise for wallet:', walletAddrForAdvise);
         
         data = await requestWalletAdviseWithX402(
           provider,
@@ -160,13 +160,9 @@ export default function InvestbudChat() {
           markAdvicePaymentToday();
         }
         
-        console.log('[InvestbudChat] Advise complete, wallet set to:', walletAddrForAdvise);
-        
       } else if (shouldUseChat) {
         // Follow-up sobre wallet ya analizada
         setPaymentStatus('💳 Processing payment...');
-        
-        console.log('[InvestbudChat] Calling chat for wallet:', analyzedWalletAddress);
         
         data = await sendWalletChatWithX402(
           provider,
@@ -175,8 +171,6 @@ export default function InvestbudChat() {
           analyzedWalletAddress!,
           'base-mainnet'
         );
-        
-        console.log('[InvestbudChat] Chat complete');
         
       } else {
         // Pregunta general: usar el flujo normal con x402
@@ -200,18 +194,16 @@ export default function InvestbudChat() {
         throw new Error(data.error);
       }
 
-      console.log('[InvestbudChat] Backend response keys:', Object.keys(data));
-      console.log('[InvestbudChat] Has portfolio_analysis:', !!data.portfolio_analysis);
-      console.log('[InvestbudChat] Has advice_id:', !!data.advice_id);
-
       // Handle regime signal from both chat and advise responses
       if (data.regime_signal) {
         setRegimeSignal(data.regime_signal as unknown as RegimeSignal);
       } else if (data.macro_signal) {
         // Convert advise macro_signal to regime_signal format
+        // Cast macro_signal to a known shape and use safe accessors/defaults
+        const macro = data.macro_signal as { regime?: string; confidence?: number } | undefined;
         setRegimeSignal({
-          current: data.macro_signal.regime.toLowerCase().replace('-', '-'),
-          confidence: data.macro_signal.confidence,
+          current: (macro?.regime ?? '').toLowerCase().replace('-', '-'),
+          confidence: macro?.confidence ?? 0,
           last_updated: data.timestamp,
         } as RegimeSignal);
       }
@@ -273,7 +265,7 @@ export default function InvestbudChat() {
       const { enhancedResponse } = await ragResponse.json();
 
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         role: 'assistant',
         content: enhancedResponse,
         timestamp: new Date(),
@@ -289,7 +281,7 @@ export default function InvestbudChat() {
 
     } catch (error) {
       const errorMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         role: 'assistant',
         content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
         timestamp: new Date(),
@@ -335,23 +327,23 @@ export default function InvestbudChat() {
         error={walletError}
       />
       
-      <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-xl border border-gray-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-linear-to-r from-gray-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold">
+      <div className="flex flex-col h-[450px] sm:h-[500px] md:h-[600px] bg-white rounded-lg shadow-xl border border-gray-200">
+        <div className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3 sm:py-3.5 md:py-4 border-b border-gray-200 bg-linear-to-r from-gray-50 to-white">
+          <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-linear-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm">
               IB
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Investbud AI</h3>
+              <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Investbud AI</h3>
               {regimeSignal && (
-                <div className="flex items-center gap-1.5 text-xs">
+                <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs">
                   {regimeSignal.current === 'risk-on' ? (
-                    <><TrendingUp className="w-3 h-3 text-green-600" /><span className="font-medium text-green-600 capitalize">{regimeSignal.current}</span></>
+                    <><TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-green-600" /><span className="font-medium text-green-600 capitalize">{regimeSignal.current}</span></>
                   ) : (
-                    <><TrendingDown className="w-3 h-3 text-red-600" /><span className="font-medium text-red-600 capitalize">{regimeSignal.current}</span></>
+                    <><TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-red-600" /><span className="font-medium text-red-600 capitalize">{regimeSignal.current}</span></>
                   )}
-                  <span className="text-gray-400">·</span>
-                  <span className="text-gray-500">
+                  <span className="text-gray-400 hidden xs:inline">·</span>
+                  <span className="text-gray-500 hidden xs:inline">
                     {new Date(regimeSignal.last_updated).toLocaleTimeString()}
                   </span>
                 </div>
@@ -359,49 +351,51 @@ export default function InvestbudChat() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {isConnected ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-green-700">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
+              <div className="flex items-center gap-1 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] sm:text-xs font-medium text-green-700">
+                    {address?.slice(0, 4)}...{address?.slice(-3)}
                   </span>
                 </div>
                 <button
                   onClick={disconnect}
-                  className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100"
+                  className="text-[10px] sm:text-xs text-gray-600 hover:text-gray-900 px-1.5 sm:px-2 py-1 rounded hover:bg-gray-100"
                 >
-                  Disconnect
+                  <span className="hidden xs:inline">Disconnect</span>
+                  <span className="xs:hidden">✕</span>
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setShowWalletModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-[11px] sm:text-xs md:text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                <Wallet className="w-4 h-4" />
-                Connect Wallet
+                <Wallet className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
+                <span className="hidden xs:inline">Connect</span>
+                <span className="xs:hidden">Connect</span>
               </button>
             )}
           </div>
         </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
         {!isConnected && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-linear-to-br from-blue-500 to-cyan-500 rounded-2xl mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold">
-              <Wallet className="w-8 h-8" />
+          <div className="text-center py-8 sm:py-10 md:py-12">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-linear-to-br from-blue-500 to-cyan-500 rounded-xl sm:rounded-2xl mx-auto mb-3 sm:mb-4 flex items-center justify-center text-white text-lg sm:text-xl md:text-2xl font-bold">
+              <Wallet className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" />
             </div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">
+            <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
               Connect Your Wallet
             </h4>
-            <p className="text-sm text-gray-600 mb-4 max-w-sm mx-auto">
+            <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 max-w-sm mx-auto px-4">
               Connect your wallet to start chatting with Investbud AI.
             </p>
             <button
               onClick={() => setShowWalletModal(true)}
-              className="px-6 py-3 bg-linear-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg"
+              className="px-5 sm:px-6 py-2.5 sm:py-3 bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm sm:text-base font-semibold rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg"
             >
               Connect Wallet
             </button>
@@ -409,17 +403,17 @@ export default function InvestbudChat() {
         )}
 
         {isConnected && messages.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-linear-to-br from-blue-500 to-cyan-500 rounded-2xl mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold">
+          <div className="text-center py-8 sm:py-10 md:py-12">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-linear-to-br from-blue-500 to-cyan-500 rounded-xl sm:rounded-2xl mx-auto mb-3 sm:mb-4 flex items-center justify-center text-white text-lg sm:text-xl md:text-2xl font-bold">
               💬
             </div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">
+            <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
               Start a Conversation
             </h4>
-            <p className="text-sm text-gray-600 mb-4 max-w-sm mx-auto">
+            <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 max-w-sm mx-auto px-4">
               Ask about macro regimes, portfolio analysis, or market conditions.
             </p>
-            <div className="flex flex-col gap-2 text-xs text-gray-500">
+            <div className="flex flex-col gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-500 px-4">
               <p>&quot;What&apos;s the current macro regime?&quot;</p>
               <p>&quot;Analyze wallet 0x123...&quot;</p>
               <p>&quot;How correlated is BTC to risk assets?&quot;</p>
@@ -435,12 +429,12 @@ export default function InvestbudChat() {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-lg px-3 sm:px-4 py-2 sm:py-3 ${
                     message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
                   }`}
                 >
                   {message.role === 'user' ? (
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-xs sm:text-sm whitespace-pre-wrap">{message.content}</p>
                   ) : (
                     <div className="text-sm markdown-content">
                       <ReactMarkdown
@@ -504,41 +498,41 @@ export default function InvestbudChat() {
         )}
       </div>
 
-        <div className="border-t border-gray-200 p-4 bg-gray-50">
+        <div className="border-t border-gray-200 p-3 sm:p-4 bg-gray-50">
           {paymentStatus && (
-            <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 text-center">
+            <div className="mb-2 sm:mb-3 px-2 sm:px-3 py-1.5 sm:py-2 bg-blue-50 border border-blue-200 rounded-lg text-[10px] sm:text-xs text-blue-700 text-center">
               {paymentStatus}
             </div>
           )}
           
           {hasAdvicePaymentToday() && analyzedWalletAddress && (
-            <div className="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center justify-between">
+            <div className="mb-2 sm:mb-3 px-2 sm:px-3 py-1.5 sm:py-2 bg-green-50 border border-green-200 rounded-lg text-[10px] sm:text-xs text-green-700 flex items-center justify-between">
               <span>✅ Wallet analysis active today: {analyzedWalletAddress.slice(0, 6)}...{analyzedWalletAddress.slice(-4)}</span>
-              <span className="text-green-600 font-medium">No extra charge</span>
+              <span className="text-green-600 font-medium hidden xs:inline">No extra charge</span>
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder={isConnected ? "Type your question..." : "Connect wallet to start..."}
-              className="flex-1 px-4 py-2 border text-black border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-3 sm:px-4 py-2 border text-black border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm"
               disabled={isLoading || !isConnected}
             />
             <button
               onClick={sendMessage}
               disabled={isLoading || !input.trim() || !isConnected}
               aria-label="Send message"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
           
-          <p className="text-xs text-gray-500 mt-2 text-center">
+          <p className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 mt-1.5 sm:mt-2 text-center leading-relaxed">
             💳 Each message requires USDC payment · You&apos;ll sign with MetaMask · ⓘ Not financial advice
           </p>
         </div>

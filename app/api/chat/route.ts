@@ -7,13 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    console.log('[Chat API] Request received:', {
-      hasMessage: !!body.message,
-      hasWalletAddress: !!body.wallet_address,
-      hasNetwork: !!body.network,
-      hasSessionId: !!body.session_id,
-    });
-    
     // Get X-PAYMENT header if present
     const paymentHeader = request.headers.get('x-payment');
     
@@ -26,8 +19,6 @@ export async function POST(request: NextRequest) {
       headers['X-PAYMENT'] = paymentHeader;
     }
 
-    console.log('[Chat API] Calling backend:', `${BACKEND_URL}/chat`);
-
     const response = await fetch(`${BACKEND_URL}/chat`, {
       method: 'POST',
       headers,
@@ -35,12 +26,6 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
-    
-    console.log('[Chat API] Backend response:', {
-      status: response.status,
-      hasData: !!data,
-      hasWalletContext: !!data.portfolio_analysis || !!data.wallet_analysis,
-    });
 
     // Forward the response with the same status code
     return NextResponse.json(data, { 
@@ -52,7 +37,6 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('[Chat API] Error:', error);
     return NextResponse.json(
       { error: 'Failed to connect to backend' },
       { status: 500 }
