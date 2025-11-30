@@ -7,11 +7,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    console.log('[Chat API] Request received:', {
-      hasMessage: !!body.message,
-      hasWalletAddress: !!body.wallet_address,
-      hasNetwork: !!body.network,
-      hasSessionId: !!body.session_id,
+    console.log('[Advise API] Request received:', {
+      wallet_address: body.wallet_address,
+      network: body.network,
+      chain_id: body.chain_id,
     });
     
     // Get X-PAYMENT header if present
@@ -26,9 +25,9 @@ export async function POST(request: NextRequest) {
       headers['X-PAYMENT'] = paymentHeader;
     }
 
-    console.log('[Chat API] Calling backend:', `${BACKEND_URL}/chat`);
+    console.log('[Advise API] Calling backend:', `${BACKEND_URL}/advise`);
 
-    const response = await fetch(`${BACKEND_URL}/chat`, {
+    const response = await fetch(`${BACKEND_URL}/advise`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -36,10 +35,9 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
     
-    console.log('[Chat API] Backend response:', {
+    console.log('[Advise API] Backend response:', {
       status: response.status,
       hasData: !!data,
-      hasWalletContext: !!data.portfolio_analysis || !!data.wallet_analysis,
     });
 
     // Forward the response with the same status code
@@ -52,15 +50,15 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('[Chat API] Error:', error);
+    console.error('[Advise API] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to connect to backend' },
+      { error: 'Failed to connect to backend', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

@@ -68,6 +68,131 @@ export async function sendMessageWithX402(
   }
 }
 
+/**
+ * Request wallet advice with automatic x402 payment handling
+ */
+export async function requestWalletAdviseWithX402(
+  provider: ethers.BrowserProvider,
+  walletAddress: string,
+  network: string,
+  chainId: number
+): Promise<{
+  response?: string;
+  reply?: string;
+  error?: string;
+  [key: string]: unknown;
+}> {
+  try {
+    // Get the Ethereum provider from window.ethereum
+    if (!window.ethereum) {
+      throw new Error('No Ethereum provider found');
+    }
+
+    // Get the connected account
+    const signer = await provider.getSigner();
+    const account = await signer.getAddress();
+
+    // Create a viem wallet client from the browser provider
+    const walletClient = createWalletClient({
+      account: account as `0x${string}`,
+      chain: baseSepolia,
+      transport: custom(window.ethereum),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }).extend(publicActions) as any;
+
+    // Wrap fetch with payment handling
+    // maxValue: 0.1 USDC = 100000 (6 decimals)
+    const fetchWithPay = wrapFetchWithPayment(fetch, walletClient, BigInt(100000));
+
+    // Make the request - x402-fetch will handle the payment flow automatically
+    const response = await fetchWithPay('/api/advise', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        wallet_address: walletAddress,
+        network,
+        chain_id: chainId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Send chat message with wallet context using automatic x402 payment handling
+ */
+export async function sendWalletChatWithX402(
+  provider: ethers.BrowserProvider,
+  sessionId: string,
+  message: string,
+  walletAddress: string,
+  network: string
+): Promise<{
+  response?: string;
+  reply?: string;
+  error?: string;
+  [key: string]: unknown;
+}> {
+  try {
+    // Get the Ethereum provider from window.ethereum
+    if (!window.ethereum) {
+      throw new Error('No Ethereum provider found');
+    }
+
+    // Get the connected account
+    const signer = await provider.getSigner();
+    const account = await signer.getAddress();
+
+    // Create a viem wallet client from the browser provider
+    const walletClient = createWalletClient({
+      account: account as `0x${string}`,
+      chain: baseSepolia,
+      transport: custom(window.ethereum),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }).extend(publicActions) as any;
+
+    // Wrap fetch with payment handling
+    // maxValue: 0.1 USDC = 100000 (6 decimals)
+    const fetchWithPay = wrapFetchWithPayment(fetch, walletClient, BigInt(100000));
+
+    // Make the request - x402-fetch will handle the payment flow automatically
+    const response = await fetchWithPay('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        message,
+        wallet_address: walletAddress,
+        network,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+
 export interface PaymentInstructions {
   recipient?: string;
   amount?: string;

@@ -14,5 +14,7 @@ export const USDC_ABI = [
   'function decimals() public view returns (uint8)',
 ] as const;
 
-// Use local API proxy to avoid CORS issues
-export const BACKEND_URL = '/api/chat';
+// Backend URLs
+export const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+export const BACKEND_URL = '/api/chat'; // Use local API proxy to avoid CORS issues
+

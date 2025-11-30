@@ -5,20 +5,83 @@ import { Send, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { ChatMessage, RegimeSignal, PortfolioSummary } from '../types/chat';
 import { useMetaMask } from '../hooks/useMetaMask';
-import { sendMessageWithX402 } from '../lib/x402';
+import { sendMessageWithX402, requestWalletAdviseWithX402, sendWalletChatWithX402 } from '../lib/x402';
 import WalletModal from './WalletModal';
 
 export default function InvestbudChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  
+  // Session ID: Mantiene el contexto de la conversación en el backend
+  // El backend usa esto para recordar el historial y contexto de wallet
+  // IMPORTANTE: No compartir el session_id ya que cualquiera con él puede acceder al historial
+  const [sessionId] = useState(() => {
+    // Intentar recuperar session_id existente o crear uno nuevo
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('investbud_session_id');
+      if (saved) return saved;
+      const newId = crypto.randomUUID();
+      localStorage.setItem('investbud_session_id', newId);
+      return newId;
+    }
+    return crypto.randomUUID();
+  });
+  
   const [regimeSignal, setRegimeSignal] = useState<RegimeSignal>();
   const [paymentStatus, setPaymentStatus] = useState<string>('');
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [analyzedWalletAddress, setAnalyzedWalletAddress] = useState<string | null>(null);
+  const [lastAdvicePaymentDate, setLastAdvicePaymentDate] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('investbud_last_advice_payment');
+    }
+    return null;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { address, isConnecting, error: walletError, provider, connect, disconnect, isConnected } = useMetaMask();
+
+  // Helper: Detectar si el mensaje es sobre análisis de wallet
+  const isWalletAnalysisRequest = (message: string): boolean => {
+    const keywords = [
+      'analiz', 'advice', 'portfolio', 'wallet', 'holdings', 'balance',
+      'assets', 'tokens', 'my wallet', 'mi wallet', 'mi cartera',
+      'analizar', 'revisar', 'checkear', 'verificar', '0x'
+    ];
+    const lowerMessage = message.toLowerCase();
+    return keywords.some(keyword => lowerMessage.includes(keyword));
+  };
+
+  // Helper: Extraer wallet address del mensaje (formato 0x...)
+  const extractWalletAddress = (message: string): string | null => {
+    const walletRegex = /0x[a-fA-F0-9]{40}/;
+    const match = message.match(walletRegex);
+    return match ? match[0] : null;
+  };
+
+  // Helper: Verificar si ya se pagó advice hoy (usando hora local de la máquina)
+  const hasAdvicePaymentToday = (): boolean => {
+    if (!lastAdvicePaymentDate) return false;
+    const now = new Date();
+    const lastPayment = new Date(lastAdvicePaymentDate);
+    
+    // Comparar año, mes y día usando hora local
+    return (
+      now.getFullYear() === lastPayment.getFullYear() &&
+      now.getMonth() === lastPayment.getMonth() &&
+      now.getDate() === lastPayment.getDate()
+    );
+  };
+
+  // Helper: Marcar que se pagó advice hoy
+  const markAdvicePaymentToday = () => {
+    const today = new Date().toISOString();
+    setLastAdvicePaymentDate(today);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('investbud_last_advice_payment', today);
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -42,31 +105,118 @@ export default function InvestbudChat() {
     setPaymentStatus('');
 
     try {
-      const metadata = {
-        user_agent: navigator.userAgent,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        wallet_address: address,
-      };
-
-      // x402-fetch handles the entire payment flow automatically
-      setPaymentStatus('💳 Processing payment...');
+      const isWalletRequest = isWalletAnalysisRequest(userMessage.content);
+      const extractedWallet = extractWalletAddress(userMessage.content);
       
-      const data = await sendMessageWithX402(
-        provider,
-        sessionId,
-        userMessage.content,
-        metadata
-      );
+      // Decidir qué endpoint usar
+      // Si el usuario proporciona una nueva wallet address explícitamente, SIEMPRE usar /advise
+      const isNewWalletRequest = extractedWallet && extractedWallet.toLowerCase() !== analyzedWalletAddress?.toLowerCase();
+      const shouldUseAdvice = isWalletRequest && (!hasAdvicePaymentToday() || isNewWalletRequest);
+      const shouldUseChat = isWalletRequest && hasAdvicePaymentToday() && !isNewWalletRequest && analyzedWalletAddress;
+      
+      // Para /advise usamos la wallet extraída o la conectada
+      // Para /chat usamos la wallet analizada previamente
+      const targetWalletAddress = shouldUseAdvice 
+        ? (extractedWallet || address) 
+        : analyzedWalletAddress;
+
+      console.log('[InvestbudChat] Request routing:', {
+        isWalletRequest,
+        extractedWallet,
+        analyzedWalletAddress,
+        targetWalletAddress,
+        isNewWalletRequest,
+        shouldUseAdvice,
+        shouldUseChat,
+        hasAdvicePaymentToday: hasAdvicePaymentToday(),
+      });
+
+      let data;
+
+      if (shouldUseAdvice) {
+        // Primera vez del día O nueva wallet: llamar /advise con pago usando x402
+        setPaymentStatus('💳 Processing payment for wallet analysis (0.1 USDC)...');
+
+        const walletAddrForAdvise = targetWalletAddress ?? address ?? '';
+        if (!walletAddrForAdvise) {
+          throw new Error('No wallet address available for wallet analysis');
+        }
+        
+        console.log('[InvestbudChat] Calling advise for wallet:', walletAddrForAdvise);
+        
+        data = await requestWalletAdviseWithX402(
+          provider,
+          walletAddrForAdvise,
+          'base-mainnet',
+          8453
+        );
+        
+        // IMPORTANTE: Actualizar la wallet analizada INMEDIATAMENTE
+        // Esto asegura que los follow-ups usen la wallet correcta
+        setAnalyzedWalletAddress(walletAddrForAdvise);
+        
+        // Solo marcar pago si es la primera vez del día
+        if (!hasAdvicePaymentToday()) {
+          markAdvicePaymentToday();
+        }
+        
+        console.log('[InvestbudChat] Advise complete, wallet set to:', walletAddrForAdvise);
+        
+      } else if (shouldUseChat) {
+        // Follow-up sobre wallet ya analizada
+        setPaymentStatus('💳 Processing payment...');
+        
+        console.log('[InvestbudChat] Calling chat for wallet:', analyzedWalletAddress);
+        
+        data = await sendWalletChatWithX402(
+          provider,
+          sessionId,
+          userMessage.content,
+          analyzedWalletAddress!,
+          'base-mainnet'
+        );
+        
+        console.log('[InvestbudChat] Chat complete');
+        
+      } else {
+        // Pregunta general: usar el flujo normal con x402
+        const metadata = {
+          user_agent: navigator.userAgent,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          wallet_address: address,
+        };
+
+        setPaymentStatus('💳 Processing payment...');
+        
+        data = await sendMessageWithX402(
+          provider,
+          sessionId,
+          userMessage.content,
+          metadata
+        );
+      }
 
       if (data.error) {
         throw new Error(data.error);
       }
 
+      console.log('[InvestbudChat] Backend response keys:', Object.keys(data));
+      console.log('[InvestbudChat] Has portfolio_analysis:', !!data.portfolio_analysis);
+      console.log('[InvestbudChat] Has advice_id:', !!data.advice_id);
+
+      // Handle regime signal from both chat and advise responses
       if (data.regime_signal) {
         setRegimeSignal(data.regime_signal as unknown as RegimeSignal);
+      } else if (data.macro_signal) {
+        // Convert advise macro_signal to regime_signal format
+        setRegimeSignal({
+          current: data.macro_signal.regime.toLowerCase().replace('-', '-'),
+          confidence: data.macro_signal.confidence,
+          last_updated: data.timestamp,
+        } as RegimeSignal);
       }
 
-      // Parse the backend response - it comes as a Python dict string
+      // Parse the backend response - handle different response formats
       let backendResponseText = '';
       
       if (data.response) {
@@ -86,12 +236,18 @@ export default function InvestbudChat() {
         }
       } else if (data.reply) {
         backendResponseText = data.reply;
+      } else if (data.advice_id) {
+        // This is an advise response - format it nicely
+        backendResponseText = JSON.stringify(data, null, 2);
       } else {
         backendResponseText = JSON.stringify(data);
       }
 
       // Process response through RAG for compliance and context
       setPaymentStatus('🤖 Processing with AI...');
+      
+      // Determine if this response has wallet context
+      const hasWalletContext = !!(data.advice_id || data.portfolio_analysis || (shouldUseChat && analyzedWalletAddress));
       
       const ragResponse = await fetch('/api/rag', {
         method: 'POST',
@@ -100,9 +256,12 @@ export default function InvestbudChat() {
           userMessage: userMessage.content,
           backendResponse: backendResponseText,
           userContext: JSON.stringify({
-            regime: data.regime_signal,
-            portfolio: data.portfolio_summary,
-            wallet_address: address,
+            regime: data.regime_signal || data.macro_signal,
+            portfolio: data.portfolio_summary || data.portfolio_analysis,
+            wallet_address: targetWalletAddress || analyzedWalletAddress || address,
+            isAdviseResponse: !!data.advice_id,
+            hasWalletContext,
+            previousWalletAddress: analyzedWalletAddress,
           }),
         }),
       });
@@ -156,6 +315,16 @@ export default function InvestbudChat() {
     }
   };
 
+  const clearSessionAndRestart = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('investbud_session_id');
+      localStorage.removeItem('investbud_last_advice_payment');
+    }
+    setMessages([]);
+    setAnalyzedWalletAddress(null);
+    window.location.reload();
+  };
+
   return (
     <>
       <WalletModal
@@ -177,11 +346,10 @@ export default function InvestbudChat() {
               {regimeSignal && (
                 <div className="flex items-center gap-1.5 text-xs">
                   {regimeSignal.current === 'risk-on' ? (
-                    <TrendingUp className="w-3 h-3 text-green-600" />
+                    <><TrendingUp className="w-3 h-3 text-green-600" /><span className="font-medium text-green-600 capitalize">{regimeSignal.current}</span></>
                   ) : (
-                    <TrendingDown className="w-3 h-3 text-red-600" />
+                    <><TrendingDown className="w-3 h-3 text-red-600" /><span className="font-medium text-red-600 capitalize">{regimeSignal.current}</span></>
                   )}
-                  <span className="font-medium capitalize">{regimeSignal.current}</span>
                   <span className="text-gray-400">·</span>
                   <span className="text-gray-500">
                     {new Date(regimeSignal.last_updated).toLocaleTimeString()}
@@ -319,11 +487,11 @@ export default function InvestbudChat() {
                 <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 shadow-sm border border-gray-200">
                   <div className="flex items-center space-x-3">
                     <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                     </div>
-                    <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    <span className="text-sm font-medium bg-gradient-to-r from-gray-200 to-gray-600 bg-clip-text text-transparent">
                       Thinking...
                     </span>
                   </div>
@@ -340,6 +508,13 @@ export default function InvestbudChat() {
           {paymentStatus && (
             <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 text-center">
               {paymentStatus}
+            </div>
+          )}
+          
+          {hasAdvicePaymentToday() && analyzedWalletAddress && (
+            <div className="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center justify-between">
+              <span>✅ Wallet analysis active today: {analyzedWalletAddress.slice(0, 6)}...{analyzedWalletAddress.slice(-4)}</span>
+              <span className="text-green-600 font-medium">No extra charge</span>
             </div>
           )}
           
