@@ -17,22 +17,22 @@ export default function ChatSection() {
               Chat-First Analysis
             </h2>
             <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-              Talk to Investbud AI like you'd talk to an analyst. Get instant insights
+              Talk to Investbud AI like you&apos;d talk to an analyst. Get instant insights
               on macro conditions, portfolio composition, and market context.
             </p>
 
             <div className="space-y-3 text-gray-600">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span>"What's the current macro regime?"</span>
+                <span>&quot;What&apos;s the current macro regime?&quot;</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
-                <span>"Analyze wallet 0x123..."</span>
+                <span>&quot;Analyze wallet 0x123...&quot;</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>"How correlated is my portfolio to BTC?"</span>
+                <span>&quot;How correlated is my portfolio to BTC?&quot;</span>
               </div>
             </div>
 

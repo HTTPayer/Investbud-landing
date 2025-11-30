@@ -18,12 +18,12 @@ export default function HowItWorks() {
       icon: Target,
       title: 'Make Informed Decisions',
       description:
-        'Receive clear analysis and educational insights. No black-box recommendations—just transparent data.',
+        'Receive clear analysis and educational insights. No black-box recommendations, just transparent data.',
     },
   ];
 
   return (
-    <section className="py-24 bg-white">
+    <section id="how-it-works" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-16">
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">

@@ -2,7 +2,7 @@ import { Code2, Zap, GitBranch } from 'lucide-react';
 
 export default function ForBuilders() {
   return (
-    <section className="py-24 bg-gray-900 text-white">
+    <section id="for-builders" className="py-24 bg-gray-900 text-white">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
